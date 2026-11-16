@@ -1,3 +1,16 @@
+from dataclasses import dataclass
+
+
+@dataclass
+class ResultadoMQ:
+    """Resultado do treinamento por mínimos quadrados."""
+
+    w: list
+    b: float
+    determinante: float
+    residuo: float
+
+
 def montar_sistema(X, y):
     """Monta A (coluna de 1s + features) e b (rótulos) para A z ≈ b."""
     if len(X) != len(y):
@@ -28,6 +41,25 @@ def multiplicar(A, B):
 def multiplicar_matriz_vetor(A, v):
     """Multiplica uma matriz por um vetor coluna."""
     return [sum(a * b for a, b in zip(linha, v)) for linha in A]
+
+
+def determinante(M):
+    """Calcula o determinante de uma matriz quadrada por expansão em cofatores."""
+    n = len(M)
+    if n == 0 or any(len(linha) != n for linha in M):
+        raise ValueError("o determinante exige uma matriz quadrada não vazia")
+
+    if n == 1:
+        return M[0][0]
+    if n == 2:
+        return M[0][0] * M[1][1] - M[0][1] * M[1][0]
+
+    total = 0.0
+    for coluna in range(n):
+        menor = [linha[:coluna] + linha[coluna + 1 :] for linha in M[1:]]
+        sinal = -1 if coluna % 2 else 1
+        total += sinal * M[0][coluna] * determinante(menor)
+    return total
 
 
 def resolver_gauss(M, v, tolerancia=1e-12):
@@ -61,13 +93,21 @@ def resolver_gauss(M, v, tolerancia=1e-12):
 
 
 def treinar_minimos_quadrados(X, y):
-    """Resolve AᵀA z = Aᵀb por Gauss e devolve (w, b).
+    """Resolve AᵀA z = Aᵀb por Gauss e devolve um ResultadoMQ.
 
     A solução z = [b, w1, w2, ...] minimiza o erro quadrático entre A z e y.
+    O resultado inclui det(AᵀA) e o resíduo ||Az − b||².
     """
     A, b = montar_sistema(X, y)
     At = transposta(A)
     AtA = multiplicar(At, A)
     Atb = multiplicar_matriz_vetor(At, b)
     z = resolver_gauss(AtA, Atb)
-    return z[1:], z[0]
+    Az = multiplicar_matriz_vetor(A, z)
+    residuo = sum((ajuste - alvo) ** 2 for ajuste, alvo in zip(Az, b))
+    return ResultadoMQ(
+        w=z[1:],
+        b=z[0],
+        determinante=determinante(AtA),
+        residuo=residuo,
+    )

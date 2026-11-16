@@ -120,12 +120,15 @@ def plotar(
     tamanho_ponto=45,
     destacar_erros=False,
     gerar_pb=True,
+    rotulos_eixos=None,
 ):
     """Desenha pontos, reta e regiões de decisão; salva o PNG e devolve o caminho."""
     if len(X) != len(y):
         raise ValueError(f"tamanhos diferentes: {len(X)} pontos e {len(y)} rótulos")
     if len(w) != 2:
         raise ValueError("o gráfico bidimensional exige exatamente 2 pesos")
+    if rotulos_eixos is not None and len(rotulos_eixos) != 2:
+        raise ValueError("rotulos_eixos deve ter exatamente 2 nomes")
 
     xmin, xmax, ymin, ymax = limites(X, margem)
     figura, eixo = plt.subplots(figsize=(9, 6))
@@ -210,8 +213,12 @@ def plotar(
 
     eixo.set_xlim(xmin, xmax)
     eixo.set_ylim(ymin, ymax)
-    eixo.set_xlabel("x₁")
-    eixo.set_ylabel("x₂")
+    if rotulos_eixos:
+        eixo.set_xlabel(rotulos_eixos[0])
+        eixo.set_ylabel(rotulos_eixos[1])
+    else:
+        eixo.set_xlabel("x₁")
+        eixo.set_ylabel("x₂")
     eixo.set_title(titulo)
     eixo.grid(alpha=0.3)
     eixo.legend(loc="upper left", bbox_to_anchor=(1.02, 1), borderaxespad=0)
@@ -387,9 +394,7 @@ def plotar_curva_limiar(
     folga = (maximo - minimo) * 0.01
     inicio = minimo - folga
     fim = maximo + folga
-    limiares = [
-        inicio + i * (fim - inicio) / (passos - 1) for i in range(passos)
-    ]
+    limiares = [inicio + i * (fim - inicio) / (passos - 1) for i in range(passos)]
 
     acuracias, sensibilidades, especificidades = [], [], []
     for limiar in limiares:

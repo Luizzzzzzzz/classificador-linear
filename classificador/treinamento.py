@@ -1,4 +1,18 @@
+import random
+from dataclasses import dataclass
+
 from .modelo import classificar
+
+
+@dataclass
+class ResultadoPerceptron:
+    """Resultado do treinamento pela regra do perceptron."""
+
+    w: list
+    b: float
+    convergiu: bool
+    epocas: int
+    erros_por_epoca: list
 
 
 def ajustar_pesos(x, y_real, w, b, taxa_aprendizado):
@@ -9,12 +23,19 @@ def ajustar_pesos(x, y_real, w, b, taxa_aprendizado):
     return novo_w, novo_b
 
 
-def treinar(X, y, taxa_aprendizado=0.1, epocas=100):
+def treinar(
+    X,
+    y,
+    taxa_aprendizado=0.01,
+    epocas=100,
+    embaralhar=True,
+    semente=42,
+):
     """Treina um classificador linear pela regra do perceptron.
 
-    Só ajusta quando erra: se o gabarito é +1 e o chute foi -1, soma uma
-    fração do ponto aos pesos; se é -1 e o chute foi +1, subtrai.
-    Devolve (w, b).
+    Só ajusta quando erra. Se ``embaralhar`` for verdadeiro, a ordem dos
+    pontos muda a cada época usando ``semente`` para reprodutibilidade.
+    Devolve um ResultadoPerceptron com a flag ``convergiu``.
     """
     if len(X) != len(y):
         raise ValueError(f"tamanhos diferentes: {len(X)} pontos e {len(y)} rótulos")
@@ -25,16 +46,34 @@ def treinar(X, y, taxa_aprendizado=0.1, epocas=100):
     if epocas < 1:
         raise ValueError("o número de épocas deve ser pelo menos 1")
 
+    rng = random.Random(semente)
     w = [0.0] * len(X[0])
     b = 0.0
+    erros_por_epoca = []
+    convergiu = False
+    epocas_executadas = 0
 
     for _ in range(epocas):
+        epocas_executadas += 1
+        indices = list(range(len(X)))
+        if embaralhar:
+            rng.shuffle(indices)
+
         erros = 0
-        for x, y_real in zip(X, y):
-            if classificar(x, w, b) != y_real:
-                w, b = ajustar_pesos(x, y_real, w, b, taxa_aprendizado)
+        for indice in indices:
+            if classificar(X[indice], w, b) != y[indice]:
+                w, b = ajustar_pesos(X[indice], y[indice], w, b, taxa_aprendizado)
                 erros += 1
+
+        erros_por_epoca.append(erros)
         if erros == 0:
+            convergiu = True
             break
 
-    return w, b
+    return ResultadoPerceptron(
+        w=w,
+        b=b,
+        convergiu=convergiu,
+        epocas=epocas_executadas,
+        erros_por_epoca=erros_por_epoca,
+    )
