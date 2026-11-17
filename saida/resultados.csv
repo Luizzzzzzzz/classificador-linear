@@ -1,0 +1,5 @@
+dataset,modelo,n,acuracia,baseline,ganho_pp
+banknote,mq,1372,0.881195,0.555394,32.58
+banknote,perceptron,1372,0.867347,0.555394,31.20
+wdbc,mq,569,0.884007,0.627417,25.66
+wdbc,perceptron,569,0.820738,0.627417,19.33

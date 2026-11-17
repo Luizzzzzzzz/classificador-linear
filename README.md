@@ -33,14 +33,8 @@ Sem argumentos, o programa:
 1. garante os CSVs em `dados/` — baixa **banknote** (UCI 267) e **WDBC**
    (UCI 17) se faltarem, e gera os dois casos sintéticos usados nos testes;
 2. roda **mínimos quadrados** e **perceptron** nos dois datasets;
-3. gera os gráficos dos dois datasets (coloridos e `_pb`).
-
-Resumo esperado:
-
-| Conjunto | MQ | Perceptron |
-|:--|:--|:--|
-| `banknote` | 88,1% | 86,7% (não convergiu em 100 épocas) |
-| `wdbc` | 88,4% | 82,1% (não convergiu em 100 épocas) |
+3. gera os gráficos dos dois datasets em `graficos/<dataset>/<modelo>/`
+   (coloridos e `_pb`) e escreve `saida/resultados.csv`.
 
 Métricas do MQ no modo padrão:
 
@@ -52,6 +46,18 @@ Métricas do MQ no modo padrão:
 Os casos sintéticos `caso_1_separavel` e `caso_2_degenerado` são gerados
 junto, mas ficam fora do modo padrão; eles são usados nos comandos de teste
 abaixo.
+
+## Resultados
+
+| Dataset | Modelo | n | Acurácia | Baseline | Ganho |
+|:--|:--|--:|--:|--:|--:|
+| banknote | MQ | 1.372 | 88,1% | 55,5% | +32,6pp |
+| banknote | Perceptron | 1.372 | 86,7% | 55,5% | +31,2pp |
+| wdbc | MQ | 569 | 88,4% | 62,7% | +25,7pp |
+| wdbc | Perceptron | 569 | 82,1% | 62,7% | +19,3pp |
+
+Gráfico comparativo: `graficos/comparacao.png` (e `graficos/comparacao_pb.png`),
+gerado no modo padrão. O MQ supera o perceptron nos dois datasets.
 
 ## Comandos individuais
 
@@ -228,21 +234,31 @@ da ordem das linhas.
 
 ## Gráficos
 
-Cada execução gera, em `graficos/`:
+Cada execução gera, em `graficos/<dataset>/<modelo>/`:
 
 ```text
-<conjunto>_<modelo>.png
-<conjunto>_<modelo>_erros.png
-<conjunto>_<modelo>_histograma.png
-<conjunto>_<modelo>_confusao.png
-<conjunto>_<modelo>_curva_limiar.png
+graficos/
+  banknote/
+    mq/
+      dispersao.png / dispersao_pb.png
+      erros.png / erros_pb.png
+      histograma.png / histograma_pb.png
+      confusao.png / confusao_pb.png
+      curva_limiar.png / curva_limiar_pb.png
+    perceptron/
+      ...
+  wdbc/
+    mq/
+      ...
+    perceptron/
+      ...
 ```
 
-Exemplos: `banknote_mq.png`, `wdbc_mq_erros.png`,
-`caso_1_separavel_perceptron.png`.
+Exemplos: `graficos/banknote/mq/dispersao.png`,
+`graficos/wdbc/mq/erros.png`, `graficos/caso_1_separavel/perceptron/dispersao.png`.
 
 Cada arquivo também ganha uma versão em preto e branco com sufixo `_pb`
-(por exemplo, `banknote_mq_pb.png`), adequada para impressão em journals.
+(por exemplo, `dispersao_pb.png`), adequada para impressão em journals.
 
 A pasta `graficos/` está no `.gitignore`; os PNGs são artefatos locais e não
 vão para o repositório.
@@ -273,7 +289,7 @@ Pontos novos:
 | `--taxa-aprendizado` | `0.01` | taxa do perceptron |
 | `--epocas` | `100` | máximo de épocas do perceptron |
 | `--semente` | `42` | semente do embaralhamento |
-| `--prefixo-saida` | `graficos/<csv>` | prefixo dos PNGs |
+| `--dir-saida` | `graficos` | pasta-base dos PNGs |
 | `--titulo` | derivado do CSV | título dos gráficos |
 | `--ponto` | — | classifica um ponto novo (repetível) |
 | `--tamanho-ponto` | automático | tamanho dos marcadores |
@@ -343,6 +359,17 @@ aos rótulos, mas **não maximiza a margem**. Quem maximiza a margem é a SVM.
 Por isso o MQ pode errar pontos mesmo quando existe uma reta que separa os
 dados, e não garante a maior folga (margem) entre as classes.
 
+## Documentação teórica
+
+A pasta `docs/` tem anotações curtas, em linguagem simples, com a matemática do
+trabalho. Servem de base para a parte teórica do relatório:
+
+- [01 — Produto interno e hiperplano](docs/01-produto-interno-e-hiperplano.md)
+- [02 — Mínimos quadrados](docs/02-minimos-quadrados.md)
+- [03 — Classificação e métricas](docs/03-classificacao-e-metricas.md)
+- [04 — Perceptron e normalização](docs/04-perceptron-e-normalizacao.md)
+- [05 — Exemplo numérico completo](docs/05-exemplo-numerico-completo.md)
+
 ## Estrutura do repositório
 
 ```text
@@ -355,10 +382,21 @@ classificador/
   treinamento.py                perceptron com shuffle e flag convergiu
   avaliacao.py                  acurácia, matriz de confusão, métricas por limiar
   grafico.py                    pontos, reta, regiões, histograma, matriz e curva
+docs/                         anotações teóricas para o relatório
+  01-produto-interno-e-hiperplano.md
+  02-minimos-quadrados.md
+  03-classificacao-e-metricas.md
+  04-perceptron-e-normalizacao.md
+  05-exemplo-numerico-completo.md
 dados/                        gerado por main.py; ignorado pelo git
   banknote.csv
   wdbc.csv
   caso_1_separavel.csv
   caso_2_degenerado.csv
+graficos/                     gerado por main.py; ignorado pelo git
+  <dataset>/<modelo>/*.png
+  comparacao.png
+saida/                        tabela comparativa versionada
+  resultados.csv
 requirements.txt
 ```
