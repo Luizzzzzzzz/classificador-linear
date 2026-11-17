@@ -1,8 +1,8 @@
 """CLI do classificador linear por mínimos quadrados.
 
 Sem argumentos, garante os CSVs em ``dados/`` (banknote, wdbc e os dois
-casos), roda os dois modelos nos dois datasets e gera os gráficos. Com
-argumentos, executa um pipeline específico.
+casos), roda os dois modelos nos dois datasets e gera os gráficos e o resumo
+em ``saida/``. Com argumentos, executa um pipeline específico.
 """
 
 import argparse
@@ -19,6 +19,7 @@ from classificador.grafico import (
     caminho_preto_e_branco,
     equacao,
     plotar,
+    plotar_comparacao,
     plotar_curva_limiar,
     plotar_histograma_escores,
     plotar_matriz_confusao,
@@ -96,7 +97,7 @@ class Configuracao:
     semente: int = 42
     pontos: list | None = None
     sem_graficos: bool = False
-    prefixo_saida: str | None = None
+    dir_saida: str = "graficos"
     titulo: str | None = None
     tamanho_ponto: float | None = None
 
@@ -176,9 +177,9 @@ def criar_parser():
         help="semente do embaralhamento por época do perceptron",
     )
     parser.add_argument(
-        "--prefixo-saida",
-        default=None,
-        help="prefixo dos gráficos (padrão: graficos/<nome do csv>)",
+        "--dir-saida",
+        default="graficos",
+        help="pasta-base dos gráficos (padrão: graficos)",
     )
     parser.add_argument(
         "--titulo",
@@ -221,7 +222,7 @@ def configuracao_de_args(args):
         semente=args.semente,
         pontos=args.ponto,
         sem_graficos=args.sem_graficos,
-        prefixo_saida=args.prefixo_saida,
+        dir_saida=args.dir_saida,
         titulo=args.titulo,
         tamanho_ponto=args.tamanho_ponto,
     )
@@ -357,7 +358,7 @@ def executar_pipeline(config):
         )
     except (OSError, ValueError) as erro:
         print(f"erro ao ler os dados: {erro}")
-        return 1
+        return None
 
     X_treino = X
     medias = desvios = None
@@ -366,7 +367,7 @@ def executar_pipeline(config):
             X_treino, medias, desvios = ajustar_zscore(X)
         except ValueError as erro:
             print(f"erro na normalização: {erro}")
-            return 1
+            return None
 
     try:
         if config.modelo == "mq":
@@ -384,7 +385,7 @@ def executar_pipeline(config):
             w_treino, b_treino = resultado.w, resultado.b
     except ValueError as erro:
         print(f"erro ao treinar o modelo: {erro}")
-        return 1
+        return None
 
     if config.normalizar:
         w, b = voltar_escala(w_treino, b_treino, medias, desvios)
@@ -456,17 +457,25 @@ def executar_pipeline(config):
                 f"f(p) = {escore:.4f} -> Classe {classe:+d}"
             )
 
-    if config.sem_graficos:
-        return 0
-
     nome_base = os.path.splitext(os.path.basename(config.csv))[0]
-    prefixo = config.prefixo_saida or f"graficos/{nome_base}"
+    resultado_pipeline = {
+        "dataset": nome_base,
+        "modelo": config.modelo,
+        "n": total,
+        "acuracia": resumo["acuracia"],
+        "baseline": baseline,
+        "ganho_pp": ganho * 100,
+    }
+
+    if config.sem_graficos:
+        return resultado_pipeline
+
+    dir_modelo = os.path.join(config.dir_saida, nome_base, config.modelo)
     titulo = config.titulo or TITULOS_PADRAO.get(
         nome_base, f"Classificador linear — {nome_base.replace('_', ' ')}"
     )
     titulo = f"{titulo} — {rotulo}"
     tamanho = config.tamanho_ponto or tamanho_ponto_automatico(total)
-    base = f"{prefixo}_{config.modelo}"
 
     try:
         caminhos = [
@@ -475,7 +484,7 @@ def executar_pipeline(config):
                 y,
                 w,
                 b,
-                f"{base}.png",
+                os.path.join(dir_modelo, "dispersao.png"),
                 titulo=titulo,
                 tamanho_ponto=tamanho,
                 rotulos_eixos=config.colunas_x,
@@ -485,7 +494,7 @@ def executar_pipeline(config):
                 y,
                 w,
                 b,
-                f"{base}_erros.png",
+                os.path.join(dir_modelo, "erros.png"),
                 titulo=f"{titulo} — erros destacados",
                 tamanho_ponto=tamanho,
                 destacar_erros=True,
@@ -496,13 +505,13 @@ def executar_pipeline(config):
                 y,
                 w,
                 b,
-                f"{base}_histograma.png",
+                os.path.join(dir_modelo, "histograma.png"),
                 titulo=f"Distribuição dos escores — {titulo}",
             ),
             plotar_matriz_confusao(
                 y,
                 previsoes,
-                f"{base}_confusao.png",
+                os.path.join(dir_modelo, "confusao.png"),
                 titulo=f"Matriz de confusão — {titulo}",
             ),
             plotar_curva_limiar(
@@ -510,20 +519,42 @@ def executar_pipeline(config):
                 y,
                 w,
                 b,
-                f"{base}_curva_limiar.png",
+                os.path.join(dir_modelo, "curva_limiar.png"),
                 titulo=f"Métricas × limiar — {titulo}",
             ),
         ]
     except ValueError as erro:
         print(f"erro ao gerar os gráficos: {erro}")
-        return 1
+        return None
 
     print("\nGráficos gerados:")
     for caminho in caminhos:
         print(f"  {caminho}")
         print(f"  {caminho_preto_e_branco(caminho)}")
 
-    return 0
+    return resultado_pipeline
+
+
+def escrever_resultados_csv(resultados, caminho="saida/resultados.csv"):
+    """Escreve uma linha por dataset/modelo no CSV de resultados."""
+    os.makedirs(os.path.dirname(caminho) or ".", exist_ok=True)
+    with open(caminho, "w", newline="", encoding="utf-8") as arquivo:
+        escritor = csv.writer(arquivo)
+        escritor.writerow(
+            ["dataset", "modelo", "n", "acuracia", "baseline", "ganho_pp"]
+        )
+        for resultado in resultados:
+            escritor.writerow(
+                [
+                    resultado["dataset"],
+                    resultado["modelo"],
+                    resultado["n"],
+                    f"{resultado['acuracia']:.6f}",
+                    f"{resultado['baseline']:.6f}",
+                    f"{resultado['ganho_pp']:.2f}",
+                ]
+            )
+    return caminho
 
 
 def main():
@@ -541,6 +572,7 @@ def main():
 
         print("Dados prontos em dados/")
         base = configuracao_de_args(args)
+        resultados = []
         for csv_path, colunas in CONJUNTOS_PADRAO:
             for modelo in ("mq", "perceptron"):
                 config = replace(
@@ -549,12 +581,31 @@ def main():
                     colunas_x=colunas,
                     modelo=modelo,
                 )
-                codigo = executar_pipeline(config)
-                if codigo != 0:
-                    return codigo
+                resultado = executar_pipeline(config)
+                if resultado is None:
+                    return 1
+                resultados.append(resultado)
+
+        try:
+            escrever_resultados_csv(resultados)
+        except OSError as erro:
+            print(f"erro ao escrever o resumo: {erro}")
+            return 1
+
+        try:
+            comparacao = plotar_comparacao(
+                resultados, os.path.join(args.dir_saida, "comparacao.png")
+            )
+        except ValueError as erro:
+            print(f"erro ao gerar o gráfico comparativo: {erro}")
+            return 1
+
+        print("\nResumo salvo em saida/resultados.csv")
+        print(f"Gráfico comparativo salvo em {comparacao}")
         return 0
 
-    return executar_pipeline(configuracao_de_args(args))
+    resultado = executar_pipeline(configuracao_de_args(args))
+    return 0 if resultado is not None else 1
 
 
 if __name__ == "__main__":

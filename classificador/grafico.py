@@ -468,3 +468,71 @@ def plotar_curva_limiar(
         plt.show()
     plt.close(figura)
     return caminho
+
+
+def plotar_comparacao(
+    resultados,
+    caminho="graficos/comparacao.png",
+    titulo="Comparação de modelos — acurácia",
+    gerar_pb=True,
+    mostrar=False,
+):
+    """Barras agrupadas de acurácia por dataset e modelo."""
+    if not resultados:
+        raise ValueError("não há resultados para comparar")
+
+    datasets = list(dict.fromkeys(item["dataset"] for item in resultados))
+    modelos = list(dict.fromkeys(item["modelo"] for item in resultados))
+    if len(modelos) != 2:
+        raise ValueError("a comparação espera exatamente 2 modelos")
+
+    acuracias = {
+        (item["dataset"], item["modelo"]): item["acuracia"] for item in resultados
+    }
+    cores = {"mq": "#d9e4f2", "perceptron": "#d62728"}
+    rotulos = {"mq": "MQ", "perceptron": "Perceptron"}
+    hachuras = {"mq": "", "perceptron": "//"}
+
+    largura = 0.35
+    posicoes = list(range(len(datasets)))
+    figura, eixo = plt.subplots(figsize=(8, 5))
+
+    for indice, modelo in enumerate(modelos):
+        valores = [acuracias.get((dataset, modelo), 0.0) for dataset in datasets]
+        deslocados = [posicao + (indice - 0.5) * largura for posicao in posicoes]
+        barras = eixo.bar(
+            deslocados,
+            valores,
+            largura,
+            label=rotulos.get(modelo, modelo),
+            color=cores.get(modelo, "#888888"),
+            hatch=hachuras.get(modelo, ""),
+            edgecolor="black",
+            linewidth=0.6,
+            zorder=3,
+        )
+        for barra, valor in zip(barras, valores):
+            eixo.text(
+                barra.get_x() + barra.get_width() / 2,
+                valor + 0.012,
+                f"{valor * 100:.1f}%".replace(".", ","),
+                ha="center",
+                va="bottom",
+                fontsize=9,
+                fontweight="bold",
+            )
+
+    eixo.set_xticks(posicoes, [nome.replace("_", " ") for nome in datasets])
+    eixo.set_ylabel("Acurácia")
+    eixo.set_ylim(0, 1.08)
+    eixo.yaxis.set_major_formatter(PercentFormatter(1.0))
+    eixo.set_title(titulo)
+    eixo.grid(axis="y", alpha=0.3, zorder=0)
+    eixo.legend(loc="upper right")
+    figura.tight_layout()
+    _salvar_versoes(figura, caminho, gerar_pb, bbox_inches="tight")
+
+    if mostrar:
+        plt.show()
+    plt.close(figura)
+    return caminho
