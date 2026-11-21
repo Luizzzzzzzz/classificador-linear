@@ -22,6 +22,12 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Testes
+
+```bash
+python -m unittest discover -s tests
+```
+
 ## Modo padrão: roda tudo
 
 ```bash
@@ -220,6 +226,10 @@ b_original   = b − Σ (w_j · média_j / desvio_j)
 A normalização também ajuda o perceptron: com `--normalizar`, ele chega a
 88,0% no banknote (mas ainda não converge em 100 épocas).
 
+Como o programa avalia no próprio conjunto de treino, as médias e os desvios
+são calculados sobre todos os pontos. Se houver separação treino/teste, calcule
+esses valores apenas no treino e reaproveite no teste para não vazar informação.
+
 ## Classe positiva explícita
 
 Os CSVs do repositório já usam rótulos `-1/+1`, então não precisam de nada.
@@ -382,6 +392,8 @@ classificador/
   treinamento.py                perceptron com shuffle e flag convergiu
   avaliacao.py                  acurácia, matriz de confusão, métricas por limiar
   grafico.py                    pontos, reta, regiões, histograma, matriz e curva
+tests/                        testes da lógica central (unittest)
+  test_core.py
 docs/                         anotações teóricas para o relatório
   01-produto-interno-e-hiperplano.md
   02-minimos-quadrados.md

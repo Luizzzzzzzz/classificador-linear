@@ -5,6 +5,9 @@ casos), roda os dois modelos nos dois datasets e gera os gráficos e o resumo
 em ``saida/``. Com argumentos, executa um pipeline específico.
 """
 
+# Ponto de entrada do programa.
+# Cuida da linha de comando, dos downloads, do pipeline e dos arquivos de saída.
+
 import argparse
 import csv
 import os
@@ -29,6 +32,7 @@ from classificador.modelo import classificar, funcao_linear
 from classificador.normalizacao import ajustar_zscore, voltar_escala
 from classificador.treinamento import treinar
 
+# Endereços de onde os datasets originais são baixados
 URL_BANKNOTE = (
     "https://archive.ics.uci.edu/ml/machine-learning-databases/"
     "00267/data_banknote_authentication.txt"
@@ -38,6 +42,7 @@ URL_WDBC = (
     "breast-cancer-wisconsin/wdbc.data"
 )
 
+# O WDBC tem 30 features; guardamos todos os nomes para o usuário poder trocar o par
 COLUNAS_WDBC = [
     "radius_mean",
     "texture_mean",
@@ -71,6 +76,7 @@ COLUNAS_WDBC = [
     "fractal_dimension_worst",
 ]
 
+# No modo padrão, estes são os datasets e as colunas usadas
 CONJUNTOS_PADRAO = [
     ("dados/banknote.csv", ["variance", "skewness"]),
     ("dados/wdbc.csv", ["radius_mean", "texture_mean"]),
@@ -104,11 +110,13 @@ class Configuracao:
 
 def percentual(valor):
     """Formata uma fração 0–1 como porcentagem com vírgula decimal."""
+    # relatório em português: 88,1% em vez de 88.1%
     return f"{valor * 100:.1f}%".replace(".", ",")
 
 
 def tamanho_ponto_automatico(quantidade):
     """Escolhe um tamanho de marcador legível para o número de pontos."""
+    # muitos pontos = marcador menor, para o gráfico não virar uma mancha
     return max(6, min(45, round(4500 / quantidade)))
 
 
@@ -234,12 +242,15 @@ def _baixar_banknote(destino):
     temporario_csv = f"{destino}.novo"
     escritos = 0
     try:
+        # baixa o arquivo cru da UCI
         with urllib.request.urlopen(URL_BANKNOTE, timeout=30) as resposta:
             conteudo = resposta.read().decode("utf-8")
 
+        # grava num temporário antes de converter
         with open(temporario, "w", newline="", encoding="utf-8") as arquivo:
             arquivo.write(conteudo)
 
+        # converte o texto cru em CSV com cabeçalho e rótulos -1/+1
         with (
             open(temporario, newline="", encoding="utf-8") as origem,
             open(temporario_csv, "w", newline="", encoding="utf-8") as saida,
@@ -257,6 +268,7 @@ def _baixar_banknote(destino):
         if escritos == 0:
             raise RuntimeError("o dataset banknote baixado está vazio")
 
+        # só coloca no lugar depois de tudo certo
         os.replace(temporario_csv, destino)
     except (urllib.error.URLError, OSError) as erro:
         raise RuntimeError(f"falha ao baixar o dataset banknote: {erro}") from erro
@@ -274,6 +286,7 @@ def _baixar_wdbc(destino):
         with urllib.request.urlopen(URL_WDBC, timeout=30) as resposta:
             texto = resposta.read().decode("utf-8-sig")
 
+        # monta o CSV com as 30 features e o rótulo (M=+1, B=-1)
         with open(temporario, "w", newline="", encoding="utf-8") as saida:
             escritor = csv.writer(saida)
             escritor.writerow([*COLUNAS_WDBC, "classe"])
@@ -296,8 +309,24 @@ def _baixar_wdbc(destino):
             os.remove(temporario)
 
 
+def validar_csv_baixado(caminho, colunas_esperadas):
+    """Confere cabeçalho e presença de dados em um CSV baixado."""
+    # confere o cabeçalho e se veio alguma linha de dados
+    with open(caminho, newline="", encoding="utf-8-sig") as arquivo:
+        leitor = csv.reader(arquivo)
+        cabecalho = next(leitor, None)
+        if cabecalho != colunas_esperadas:
+            raise ValueError(
+                f"cabeçalho inesperado em {caminho}: {cabecalho}; "
+                f"esperado: {colunas_esperadas}"
+            )
+        if next(leitor, None) is None:
+            raise ValueError(f"CSV baixado sem linhas de dados: {caminho}")
+
+
 def _gerar_caso_1(destino):
     """Cria o caso linearmente separável."""
+    # dois blocos bem longe um do outro: a reta separa sem esforço
     with open(destino, "w", newline="", encoding="utf-8") as arquivo:
         escritor = csv.writer(arquivo)
         escritor.writerow(["x1", "x2", "classe"])
@@ -311,6 +340,7 @@ def _gerar_caso_1(destino):
 
 def _gerar_caso_2(destino):
     """Cria o caso não separável com rótulos ruidosos."""
+    # rótulos embaralhados de propósito: nenhuma reta resolve direito
     with open(destino, "w", newline="", encoding="utf-8") as arquivo:
         escritor = csv.writer(arquivo)
         escritor.writerow(["x1", "x2", "classe"])
@@ -325,15 +355,20 @@ def _gerar_caso_2(destino):
 
 def garantir_dados():
     """Garante os CSVs dos 2 datasets e dos 2 casos em dados/."""
+    # se o arquivo já existe, não baixa de novo
     os.makedirs("dados", exist_ok=True)
 
     banknote = os.path.join("dados", "banknote.csv")
     if not os.path.exists(banknote):
         _baixar_banknote(banknote)
+    validar_csv_baixado(
+        banknote, ["variance", "skewness", "curtosis", "entropy", "classe"]
+    )
 
     wdbc = os.path.join("dados", "wdbc.csv")
     if not os.path.exists(wdbc):
         _baixar_wdbc(wdbc)
+    validar_csv_baixado(wdbc, [*COLUNAS_WDBC, "classe"])
 
     caso_1 = os.path.join("dados", "caso_1_separavel.csv")
     if not os.path.exists(caso_1):
@@ -349,6 +384,7 @@ def executar_pipeline(config):
     rotulo = rotulo_modelo(config.modelo)
     print(f"\n=== {rotulo.upper()} | {config.csv} ===")
 
+    # 1) ler o CSV e converter para X (pontos) e y (rótulos)
     try:
         X, y = ler_dados(
             config.csv,
@@ -360,6 +396,7 @@ def executar_pipeline(config):
         print(f"erro ao ler os dados: {erro}")
         return None
 
+    # 2) normalizar se o usuário pediu
     X_treino = X
     medias = desvios = None
     if config.normalizar:
@@ -369,6 +406,7 @@ def executar_pipeline(config):
             print(f"erro na normalização: {erro}")
             return None
 
+    # 3) treinar: MQ ou perceptron
     try:
         if config.modelo == "mq":
             resultado = treinar_minimos_quadrados(X_treino, y)
@@ -387,11 +425,13 @@ def executar_pipeline(config):
         print(f"erro ao treinar o modelo: {erro}")
         return None
 
+    # se treinou normalizado, volta a reta para a escala original
     if config.normalizar:
         w, b = voltar_escala(w_treino, b_treino, medias, desvios)
     else:
         w, b = w_treino, b_treino
 
+    # 4) avaliar: chuta todo mundo e compara com o gabarito
     previsoes = [classificar(ponto, w, b) for ponto in X]
     resumo = avaliar_modelo(X, y, w, b)
     contagens = matriz_confusao(y, previsoes)
@@ -447,6 +487,7 @@ def executar_pipeline(config):
                 f"{resultado.erros_por_epoca[-1]}"
             )
 
+    # classifica pontos que o usuário passou na linha de comando
     if config.pontos:
         print("\nPontos novos:")
         for ponto in config.pontos:
@@ -470,6 +511,7 @@ def executar_pipeline(config):
     if config.sem_graficos:
         return resultado_pipeline
 
+    # 5) gráficos em graficos/<dataset>/<modelo>/
     dir_modelo = os.path.join(config.dir_saida, nome_base, config.modelo)
     titulo = config.titulo or TITULOS_PADRAO.get(
         nome_base, f"Classificador linear — {nome_base.replace('_', ' ')}"
@@ -538,6 +580,7 @@ def executar_pipeline(config):
 def escrever_resultados_csv(resultados, caminho="saida/resultados.csv"):
     """Escreve uma linha por dataset/modelo no CSV de resultados."""
     os.makedirs(os.path.dirname(caminho) or ".", exist_ok=True)
+    # uma linha por dataset/modelo, pronta para abrir numa planilha
     with open(caminho, "w", newline="", encoding="utf-8") as arquivo:
         escritor = csv.writer(arquivo)
         escritor.writerow(
@@ -561,9 +604,11 @@ def main():
     """Executa o modo padrão (tudo) ou um pipeline específico."""
     parser = criar_parser()
     args = parser.parse_args()
+    # sem nenhum argumento, roda tudo: dados, modelos e gráficos
     modo_tudo = len(sys.argv) == 1
 
     if modo_tudo:
+        # primeiro garante que os CSVs existem
         try:
             garantir_dados()
         except (RuntimeError, OSError) as erro:
@@ -573,6 +618,7 @@ def main():
         print("Dados prontos em dados/")
         base = configuracao_de_args(args)
         resultados = []
+        # roda os dois modelos em cada dataset e guarda as métricas
         for csv_path, colunas in CONJUNTOS_PADRAO:
             for modelo in ("mq", "perceptron"):
                 config = replace(
@@ -586,12 +632,14 @@ def main():
                     return 1
                 resultados.append(resultado)
 
+        # salva a tabela comparativa em CSV
         try:
             escrever_resultados_csv(resultados)
         except OSError as erro:
             print(f"erro ao escrever o resumo: {erro}")
             return 1
 
+        # e o gráfico de barras comparando os modelos
         try:
             comparacao = plotar_comparacao(
                 resultados, os.path.join(args.dir_saida, "comparacao.png")
@@ -604,6 +652,7 @@ def main():
         print(f"Gráfico comparativo salvo em {comparacao}")
         return 0
 
+    # com argumentos, roda só o pipeline pedido
     resultado = executar_pipeline(configuracao_de_args(args))
     return 0 if resultado is not None else 1
 
