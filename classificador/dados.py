@@ -1,3 +1,6 @@
+# Lê o CSV e transforma em X (pontos) e y (rótulos +1/-1).
+# Aqui também decidimos qual valor do arquivo representa a classe positiva.
+
 import csv
 
 
@@ -12,10 +15,20 @@ def mapear_rotulos(rotulos, classe_positiva=None, mapa=None):
     if mapa is not None and classe_positiva is not None:
         raise ValueError("informe apenas 'mapa' ou 'classe_positiva', não os dois")
 
+    # se o usuário passou um mapa pronto, só aplica
     if mapa is not None:
-        return [mapa[rotulo] for rotulo in rotulos]
+        convertidos = [mapa[rotulo] for rotulo in rotulos]
+        invalidos = {valor for valor in convertidos if valor not in (-1, 1)}
+        if invalidos:
+            raise ValueError(
+                f"o mapa produziu rótulos fora de -1/+1: {sorted(invalidos)}"
+            )
+        return convertidos
 
+    # descobre quais classes aparecem no arquivo
     classes = list(dict.fromkeys(rotulos))
+
+    # se o usuário declarou a positiva, ela vira +1 e a outra vira -1
     if classe_positiva is not None:
         if len(classes) != 2:
             raise ValueError(
@@ -27,6 +40,7 @@ def mapear_rotulos(rotulos, classe_positiva=None, mapa=None):
             )
         return [1 if rotulo == classe_positiva else -1 for rotulo in rotulos]
 
+    # rótulos que já são -1/+1 podem seguir do jeito que estão
     try:
         numericos = [float(rotulo) for rotulo in rotulos]
     except (TypeError, ValueError):
@@ -35,6 +49,7 @@ def mapear_rotulos(rotulos, classe_positiva=None, mapa=None):
     if numericos is not None and set(numericos) <= {-1.0, 1.0}:
         return [int(valor) for valor in numericos]
 
+    # qualquer outro caso precisa de uma declaração explícita
     raise ValueError(
         "rótulos fora de {-1, +1}; informe a classe positiva (--classe-positiva) "
         "ou passe um mapa explícito"
@@ -56,6 +71,7 @@ def ler_dados(
     ``classe_positiva`` para declarar qual valor do CSV representa a classe
     +1 quando os rótulos não forem -1/+1.
     """
+    # conferências rápidas antes de abrir o arquivo
     if not colunas_x:
         raise ValueError("informe pelo menos uma coluna de feature")
     if len(set(colunas_x)) != len(colunas_x):
@@ -64,7 +80,9 @@ def ler_dados(
         raise ValueError("a coluna de rótulo não pode ser usada como feature")
 
     with open(caminho, newline="", encoding="utf-8-sig") as arquivo:
+        # o DictReader usa a primeira linha como nome das colunas
         leitor = csv.DictReader(arquivo, delimiter=delimitador)
+        # tira espaços que possam ter sobrado no cabeçalho
         if leitor.fieldnames is not None:
             leitor.fieldnames = [nome.strip() for nome in leitor.fieldnames]
 
@@ -81,6 +99,7 @@ def ler_dados(
             if not linha or all(valor in (None, "") for valor in linha.values()):
                 continue
 
+            # cada linha vira um ponto com as coordenadas convertidas para número
             try:
                 ponto = [float(linha[coluna].strip()) for coluna in colunas_x]
             except (AttributeError, TypeError, ValueError):
@@ -98,5 +117,6 @@ def ler_dados(
     if not X:
         raise ValueError(f"nenhum dado válido encontrado em {caminho}")
 
+    # no fim, converte os rótulos de texto/número para +1/-1
     y = mapear_rotulos(rotulos, classe_positiva=classe_positiva, mapa=mapa_rotulos)
     return X, y

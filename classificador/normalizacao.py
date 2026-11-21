@@ -1,3 +1,6 @@
+# Coloca as features na mesma escala (z-score) e depois desfaz a conta.
+# Sem isso, uma feature com números grandes pode dominar a outra.
+
 import math
 
 
@@ -15,12 +18,14 @@ def ajustar_zscore(X):
         raise ValueError("todos os pontos devem ter a mesma quantidade de features")
 
     total = len(X)
+    # média e desvio de cada coluna
     medias = [sum(ponto[j] for ponto in X) / total for j in range(dimensao)]
     desvios = [
         math.sqrt(sum((ponto[j] - medias[j]) ** 2 for ponto in X) / total)
         for j in range(dimensao)
     ]
 
+    # se a coluna é constante, não dá para dividir por zero
     if any(desvio == 0 for desvio in desvios):
         raise ValueError(
             "não é possível normalizar uma feature constante (desvio zero)"
@@ -37,6 +42,7 @@ def voltar_escala(w, b, medias, desvios):
     if not (len(w) == len(medias) == len(desvios)):
         raise ValueError("w, médias e desvios devem ter o mesmo tamanho")
 
+    # desfaz a divisão feita na normalização
     w_original = [wj / desvio for wj, desvio in zip(w, desvios)]
     b_original = b - sum(
         wj * media / desvio for wj, media, desvio in zip(w, medias, desvios)

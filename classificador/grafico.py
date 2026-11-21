@@ -1,5 +1,10 @@
+# Todos os desenhos do trabalho ficam aqui.
+# A ideia é sempre a mesma: pontos, reta e regiões de decisão.
+# Cada função salva o PNG colorido e também uma versão em preto e branco.
+
 import math
 import os
+from contextlib import contextmanager
 
 import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
@@ -8,6 +13,19 @@ from PIL import Image
 
 from .avaliacao import matriz_confusao, metricas_por_limiar
 from .modelo import classificar, funcao_linear
+
+
+@contextmanager
+def _figuras_temporarias():
+    """Fecha qualquer figura criada durante a chamada, mesmo se houver erro."""
+    # lembra quais figuras já estavam abertas antes
+    antes = set(plt.get_fignums())
+    try:
+        yield
+    finally:
+        # fecha só as que esta função criou, mesmo se tiver dado erro
+        for numero in set(plt.get_fignums()) - antes:
+            plt.close(numero)
 
 
 def caminho_preto_e_branco(caminho):
@@ -19,8 +37,10 @@ def caminho_preto_e_branco(caminho):
 def _salvar_versoes(figura, caminho, gerar_pb=True, **opcoes):
     """Salva o PNG colorido e, se pedido, uma versão em tons de cinza."""
     os.makedirs(os.path.dirname(caminho) or ".", exist_ok=True)
+    # salva primeiro a versão colorida
     figura.savefig(caminho, dpi=150, **opcoes)
     if gerar_pb:
+        # depois converte para tons de cinza (fica melhor para imprimir)
         destino = caminho_preto_e_branco(caminho)
         with Image.open(caminho) as imagem:
             cinza = imagem.convert("L")
@@ -40,6 +60,7 @@ def limites(X, margem=0.1):
     xmin, xmax = min(xs), max(xs)
     ymin, ymax = min(ys), max(ys)
 
+    # deixa uma folga para os pontos não colarem na borda
     largura = (xmax - xmin) or 1.0
     altura = (ymax - ymin) or 1.0
 
@@ -56,6 +77,7 @@ def gerar_grade(X, resolucao=200, margem=0.1):
     if resolucao < 2:
         raise ValueError("a resolução da grade deve ser pelo menos 2")
 
+    # malha retangular que cobre toda a área dos pontos
     xmin, xmax, ymin, ymax = limites(X, margem)
     passo_x = (xmax - xmin) / (resolucao - 1)
     passo_y = (ymax - ymin) / (resolucao - 1)
@@ -76,9 +98,11 @@ def reta_decisao(w, b, xmin, xmax, ymin, ymax):
         raise ValueError("o gráfico bidimensional exige exatamente 2 pesos")
 
     tolerancia = 1e-12
+    # caso normal: y = -(w1*x + b)/w2
     if abs(w[1]) > tolerancia:
         xs = [xmin, xmax]
         ys = [-(w[0] * x + b) / w[1] for x in xs]
+    # se w2 é quase zero, a reta fica vertical
     elif abs(w[0]) > tolerancia:
         x = -b / w[0]
         xs = [x, x]
@@ -102,10 +126,12 @@ def equacao(w, b):
     if len(w) != 2:
         raise ValueError("a equação bidimensional exige exatamente 2 pesos")
 
+    # deixa o vetor normal com tamanho 1 para a conta ficar legível
     w_unit, b_unit = normalizar(w, b)
     return f"{w_unit[0]:+.2f}x₁ {w_unit[1]:+.2f}x₂ {b_unit:+.2f} = 0"
 
 
+@_figuras_temporarias()
 def plotar(
     X,
     y,
@@ -134,6 +160,7 @@ def plotar(
     figura, eixo = plt.subplots(figsize=(9, 6))
 
     if mostrar_regioes:
+        # pinta o fundo: de um lado a classe +1, do outro a classe -1
         xs, ys = gerar_grade(X, resolucao, margem)
         Z = classificar_grade(xs, ys, w, b)
         eixo.contourf(
@@ -146,6 +173,7 @@ def plotar(
             hatches=["", "//"],
         )
 
+    # cada classe tem cor e formato diferentes (ajuda no preto e branco)
     cores = {1: "#1f77b4", -1: "#d62728"}
     marcadores = {1: "o", -1: "^"}
     for classe, rotulo in ((1, "Classe +1"), (-1, "Classe -1")):
@@ -164,6 +192,7 @@ def plotar(
             )
 
     if destacar_erros:
+        # marca com símbolo próprio quem o modelo errou
         previsoes = [classificar(ponto, w, b) for ponto in X]
         falsos_positivos = [
             ponto
@@ -201,6 +230,7 @@ def plotar(
                 zorder=5,
             )
 
+    # desenha a reta separadora por cima de tudo
     xs_reta, ys_reta = reta_decisao(w, b, xmin, xmax, ymin, ymax)
     eixo.plot(
         xs_reta,
@@ -213,6 +243,7 @@ def plotar(
 
     eixo.set_xlim(xmin, xmax)
     eixo.set_ylim(ymin, ymax)
+    # usa os nomes reais das colunas quando o main passa esses rótulos
     if rotulos_eixos:
         eixo.set_xlabel(rotulos_eixos[0])
         eixo.set_ylabel(rotulos_eixos[1])
@@ -231,6 +262,7 @@ def plotar(
     return caminho
 
 
+@_figuras_temporarias()
 def plotar_histograma_escores(
     X,
     y,
@@ -266,6 +298,7 @@ def plotar_histograma_escores(
     bordas = [minimo + i * passo for i in range(bins + 1)]
 
     figura, eixo = plt.subplots(figsize=(8, 5))
+    # dois histogramas alinhados para ver onde as classes se misturam
     eixo.hist(
         escores_negativos,
         bins=bordas,
@@ -285,6 +318,7 @@ def plotar_histograma_escores(
         linewidth=0.4,
         label="Classe +1",
     )
+    # linha no zero: é o corte que o classificador usa
     eixo.axvline(
         0,
         color="black",
@@ -307,6 +341,7 @@ def plotar_histograma_escores(
     return caminho
 
 
+@_figuras_temporarias()
 def plotar_matriz_confusao(
     y_real,
     y_previsto,
@@ -329,6 +364,7 @@ def plotar_matriz_confusao(
     nomes = [["VN", "FP"], ["FN", "VP"]]
 
     figura, eixo = plt.subplots(figsize=(5.5, 4.8))
+    # linha é o gabarito; coluna é o chute do modelo
     imagem = eixo.imshow(matriz, cmap="Blues", origin="upper")
     eixo.set_xticks([0, 1], labels=["Predita -1", "Predita +1"])
     eixo.set_yticks([0, 1], labels=["Real -1", "Real +1"])
@@ -366,6 +402,7 @@ def plotar_matriz_confusao(
     return caminho
 
 
+@_figuras_temporarias()
 def plotar_curva_limiar(
     X,
     y,
@@ -385,6 +422,7 @@ def plotar_curva_limiar(
     if passos < 2:
         raise ValueError("a curva precisa de pelo menos 2 limiares")
 
+    # varre vários cortes e mede o que acontece em cada um
     escores = [funcao_linear(ponto, w, b) for ponto in X]
     minimo, maximo = min(escores), max(escores)
     if minimo == maximo:
@@ -470,6 +508,7 @@ def plotar_curva_limiar(
     return caminho
 
 
+@_figuras_temporarias()
 def plotar_comparacao(
     resultados,
     caminho="graficos/comparacao.png",
@@ -497,6 +536,7 @@ def plotar_comparacao(
     posicoes = list(range(len(datasets)))
     figura, eixo = plt.subplots(figsize=(8, 5))
 
+    # uma barra para MQ e outra para perceptron em cada dataset
     for indice, modelo in enumerate(modelos):
         valores = [acuracias.get((dataset, modelo), 0.0) for dataset in datasets]
         deslocados = [posicao + (indice - 0.5) * largura for posicao in posicoes]
