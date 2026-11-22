@@ -6,7 +6,7 @@
 **Grupo 3 — Tema 2**
 **Integrantes:**
 - Marcos Paulo — [@MpSantana31](https://github.com/MpSantana31)
-- Luiz Otávio — [@Luizzzzzzzzd](https://github.com/Luizzzzzzzzd)
+- Luiz Otávio — [@Luizzzzzzzz](https://github.com/Luizzzzzzzz)
 
 Trabalho de Álgebra Linear: classificador linear binário em 2D, treinado por
 mínimos quadrados ou perceptron. O programa lê um CSV, monta o sistema normal
